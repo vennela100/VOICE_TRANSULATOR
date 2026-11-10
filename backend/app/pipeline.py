@@ -86,7 +86,7 @@ class MessagePipeline:
                 return
             await self.deliver(row, speech_text, target_language, db_session)
         except Exception as exc:
-            logger.warning("Message processing failed (%s, %s)", message_id, type(exc).__name__)
+            logger.warning("Message processing failed (%s, %s: %s)", message_id, type(exc).__name__, exc)
             row.status = "failed"
             db_session.commit()
             await self.ws.send_to_participant(room_id, sender_id, self.event(

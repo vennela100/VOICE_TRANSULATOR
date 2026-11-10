@@ -22,17 +22,14 @@ export default function Home() {
 
   const handleCreate = async (e) => {
     e?.preventDefault()
-    if (!name.trim()) {
-      setError('Please enter your name to start')
-      return
-    }
+    const participantName = name.trim() || 'Speaker 1'
     setError('')
     setLoading(true)
     try {
       const res = await fetch('/api/rooms', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ participant_name: name.trim(), language }),
+        body: JSON.stringify({ participant_name: participantName, language }),
       })
       if (!res.ok) {
         const data = await res.json()
@@ -44,7 +41,7 @@ export default function Home() {
         roomCode: data.room_code,
         participantId: data.participant_id,
         participantToken: data.participant_token,
-        participantName: name.trim(),
+        participantName: participantName,
         language,
       }))
       navigate(`/room/${data.room_code}`, {
@@ -53,7 +50,7 @@ export default function Home() {
           roomCode: data.room_code,
           participantId: data.participant_id,
           participantToken: data.participant_token,
-          participantName: name.trim(),
+          participantName: participantName,
           language,
         },
       })
@@ -66,10 +63,7 @@ export default function Home() {
 
   const handleJoin = async (e) => {
     e?.preventDefault()
-    if (!name.trim()) {
-      setError('Please enter your name')
-      return
-    }
+    const participantName = name.trim() || 'Speaker 2'
     if (!joinCode.trim() || joinCode.trim().length !== 6) {
       setError('Please enter the 6-character room code')
       return
@@ -81,7 +75,7 @@ export default function Home() {
       const res = await fetch(`/api/rooms/${code}/join`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ participant_name: name.trim(), language }),
+        body: JSON.stringify({ participant_name: participantName, language }),
       })
       if (!res.ok) {
         const data = await res.json()
@@ -93,7 +87,7 @@ export default function Home() {
         roomCode: data.room_code,
         participantId: data.participant_id,
         participantToken: data.participant_token,
-        participantName: name.trim(),
+        participantName: participantName,
         language,
       }))
       navigate(`/room/${data.room_code}`, {
@@ -102,7 +96,7 @@ export default function Home() {
           roomCode: data.room_code,
           participantId: data.participant_id,
           participantToken: data.participant_token,
-          participantName: name.trim(),
+          participantName: participantName,
           language,
         },
       })
