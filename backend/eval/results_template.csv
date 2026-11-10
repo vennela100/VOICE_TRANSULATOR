@@ -1,0 +1,1 @@
+case_id,language,condition,reference_transcript,stt_hypothesis,expected_translation,observed_translation,human_translation_rating,critical_values_match,latency_ms,completed
