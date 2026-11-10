@@ -18,7 +18,8 @@ export const LANG_LABELS = {
 
 export default function TranscriptBubble({ message, isOwn }) {
   const audioRef = useRef(null)
-  const [playbackState, setPlaybackState] = useState('idle')
+  const [playbackState, setPlaybackState] = useState('idle') // 'idle' | 'playing' | 'error'
+
   const {
     originalText,
     originalLanguage,
@@ -29,6 +30,7 @@ export default function TranscriptBubble({ message, isOwn }) {
     status,
     senderName,
   } = message
+
   const criticalEntities = [
     ...Object.values(message.verification?.entities_original || {}).flat(),
     ...Object.values(message.verification?.entities_translated || {}).flat(),
@@ -66,59 +68,140 @@ export default function TranscriptBubble({ message, isOwn }) {
   }
 
   return (
-    <div className={`transcript-bubble ${isOwn ? 'own' : 'other'}`}>
-      <div className="bubble-header">
-        <span className="sender-name">{isOwn ? 'You' : senderName || 'Partner'}</span>
-        <span className="sender-lang">{LANG_LABELS[originalLanguage] || originalLanguage}</span>
-        {status === 'processing' && <span className="status-badge processing">Processing...</span>}
-        {status === 'translating' && <span className="status-badge processing">Transcript ready - Translating...</span>}
-        {status === 'translated' && <span className="status-badge processing">Translation ready - Preparing audio...</span>}
-        {status === 'awaiting_confirmation' && <span className="status-badge processing">{isOwn ? 'Needs your confirmation' : 'Waiting for speaker'}</span>}
+    <article className={`bubble-container ${isOwn ? 'is-own' : 'is-partner'}`}>
+      <div className="bubble-card">
+        {/* Header row: Sender name, language & status badge */}
+        <div className="bubble-top-meta">
+          <div className="speaker-info">
+            <span className="speaker-avatar">
+              {isOwn ? '👤' : '👥'}
+            </span>
+            <span className="speaker-name">{isOwn ? 'You' : senderName || 'Partner'}</span>
+            <span className="speaker-lang-badge">
+              {LANG_LABELS[originalLanguage] || originalLanguage}
+            </span>
+          </div>
+
+          <div className="bubble-status-wrapper">
+            {status === 'processing' && (
+              <span className="bubble-badge processing">
+                <span className="mini-spin" /> Transcribing...
+              </span>
+            )}
+            {status === 'translating' && (
+              <span className="bubble-badge processing">
+                <span className="mini-spin" /> Translating...
+              </span>
+            )}
+            {status === 'translated' && (
+              <span className="bubble-badge processing">
+                <span className="mini-spin" /> Synthesizing Voice...
+              </span>
+            )}
+            {status === 'awaiting_confirmation' && (
+              <span className="bubble-badge warning">
+                ⚠️ {isOwn ? 'Confirmation Needed' : 'Checking with Speaker'}
+              </span>
+            )}
+            {status === 'delivered' && (
+              <span className="bubble-badge success">
+                ✓ Delivered
+              </span>
+            )}
+            {status === 'error' && (
+              <span className="bubble-badge danger">
+                ⚠ Error
+              </span>
+            )}
+            {status === 'rejected' && (
+              <span className="bubble-badge danger">
+                Discarded
+              </span>
+            )}
+          </div>
+        </div>
+
+        {/* Original Speech Segment */}
+        {originalText && (
+          <div className="speech-segment original-segment">
+            <div className="segment-label-row">
+              <span className="segment-label">Spoken ({LANG_LABELS[originalLanguage] || originalLanguage})</span>
+            </div>
+            <p className="speech-text original-text">{originalText}</p>
+          </div>
+        )}
+
+        {/* Translated Speech Segment */}
+        {translatedText && (
+          <div className="speech-segment translated-segment">
+            <div className="segment-label-row">
+              <span className="segment-label">Translation ({LANG_LABELS[translatedLanguage] || translatedLanguage})</span>
+            </div>
+            <p className="speech-text translated-text">{translatedText}</p>
+          </div>
+        )}
+
+        {/* Meaning Protection Alert / Badge */}
+        {message.verification && (
+          <div className="meaning-protection-box">
+            {message.verification.status === 'needs_confirmation' ? (
+              <div className="meaning-pill warning">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
+                <span>Critical detail (number/date) requires speaker confirmation</span>
+              </div>
+            ) : hasUnreviewedWordMapping ? (
+              <div className="meaning-pill info">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/><circle cx="12" cy="12" r="1"/></svg>
+                <span>Spoken number interpreted from words · Preserved</span>
+              </div>
+            ) : (
+              <div className="meaning-pill verified">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/><polyline points="9 12 11 14 15 10"/></svg>
+                <span>Meaning Protection Active</span>
+              </div>
+            )}
+          </div>
+        )}
+
+        {/* Audio Action Footer */}
+        {audioBase64 && (
+          <div className="bubble-action-footer">
+            <button
+              type="button"
+              className={`voice-playback-btn ${playbackState === 'playing' ? 'is-playing' : ''}`}
+              onClick={playAudio}
+              aria-label="Play translated voice"
+            >
+              {playbackState === 'playing' ? (
+                <>
+                  <div className="mini-audio-bars" aria-hidden="true">
+                    <span className="mini-bar b1" />
+                    <span className="mini-bar b2" />
+                    <span className="mini-bar b3" />
+                  </div>
+                  <span>Playing Voice...</span>
+                </>
+              ) : (
+                <>
+                  <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2">
+                    <polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"/>
+                    <path d="M19.07 4.93a10 10 0 0 1 0 14.14M15.54 8.46a5 5 0 0 1 0 7.07"/>
+                  </svg>
+                  <span>Play Translation Audio</span>
+                </>
+              )}
+            </button>
+          </div>
+        )}
+
+        {playbackState === 'error' && (
+          <p className="playback-error-hint">⚠️ Could not play audio. Check device volume.</p>
+        )}
+
+        {message.audioError && (
+          <p className="playback-error-hint">Subtitles only · Voice audio was unavailable.</p>
+        )}
       </div>
-
-      {originalText && (
-        <div className="bubble-original">
-          <span className="text-label">Original</span>
-          <p>{originalText}</p>
-        </div>
-      )}
-
-      {translatedText && (
-        <div className="bubble-translated">
-          <span className="text-label">Translation ({LANG_LABELS[translatedLanguage] || translatedLanguage})</span>
-          <p>{translatedText}</p>
-        </div>
-      )}
-
-      {message.verification?.overall_meaning_verified === false && (
-        <p className={`meaning-check-note ${message.verification.status === 'needs_confirmation' ? 'needs-confirmation' : ''}`}>
-          {message.verification.status === 'needs_confirmation'
-            ? 'A supported critical detail needs confirmation.'
-            : 'Supported critical-detail checks passed. The full translation is not verified.'}
-        </p>
-      )}
-      {hasUnreviewedWordMapping && (
-        <p className="meaning-check-note needs-confirmation">
-          A spoken number was interpreted from words. Check it with the speaker before acting on it.
-        </p>
-      )}
-
-      {audioBase64 && (
-        <button className="play-audio-btn" onClick={playAudio} title="Play translation audio" aria-label="Play translated speech">
-          {playbackState === 'playing' ? 'Playing audio...' : '🔊 Play translated audio'}
-        </button>
-      )}
-      {playbackState === 'error' && <span className="status-badge error" role="alert">Audio could not play. Check your device volume and try again.</span>}
-
-      {status === 'delivered' && (
-        <span className="status-badge delivered">✓ Delivered</span>
-      )}
-      {status === 'error' && (
-        <span className="status-badge error">⚠ Error</span>
-      )}
-      {status === 'rejected' && <span className="status-badge error">Not sent. Please re-record.</span>}
-      {message.confirmed && <span className="status-badge delivered">Critical details confirmed</span>}
-      {message.audioError && <span className="status-badge error">Subtitles only. Audio unavailable.</span>}
-    </div>
+    </article>
   )
 }

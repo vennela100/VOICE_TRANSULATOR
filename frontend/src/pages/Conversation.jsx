@@ -4,23 +4,9 @@ import { useWebSocket } from '../hooks/useWebSocket'
 import { useAudioRecorder } from '../hooks/useAudioRecorder'
 import { WS_EVENTS, generateMessageId } from '../api/ws'
 import PushToTalk from '../components/PushToTalk'
-import TranscriptBubble from '../components/TranscriptBubble'
+import TranscriptBubble, { LANG_LABELS } from '../components/TranscriptBubble'
 import './Conversation.css'
 
-const LANG_LABELS = {
-  hi: 'Hindi',
-  en: 'English',
-  te: 'Telugu',
-  ta: 'Tamil',
-  kn: 'Kannada',
-  ml: 'Malayalam',
-  mr: 'Marathi',
-  bn: 'Bengali',
-  gu: 'Gujarati',
-  pa: 'Punjabi',
-  or: 'Odia',
-  ur: 'Urdu',
-}
 const MAX_RECORDING_SECONDS = 28
 
 export default function Conversation() {
@@ -65,8 +51,9 @@ function ConversationInner({ session, roomCode }) {
   const [pendingAudio, setPendingAudio] = useState(null)
   const [outcome, setOutcome] = useState(null)
   const [showOutcome, setShowOutcome] = useState(false)
+  const [copied, setCopied] = useState(false)
+  
   const messagesEndRef = useRef(null)
-  const codeCopiedRef = useRef(false)
   const recordingTimerRef = useRef(null)
   const stopInProgressRef = useRef(false)
 
@@ -104,15 +91,23 @@ function ConversationInner({ session, roomCode }) {
       setParticipants(data.participants || [])
       for (const item of data.messages || []) {
         updateMessage(item.message_id, {
-          senderId: item.sender_id, senderName: item.sender_id === participantId ? participantName : 'Partner',
-          originalText: item.original_text, originalLanguage: item.original_language,
-          translatedText: item.translated_text, translatedLanguage: item.translated_language,
-          status: item.status, verification: item.verification, confirmed: item.confirmed,
-          audioBase64: item.audio_base64, audioFormat: item.audio_format || 'wav',
+          senderId: item.sender_id,
+          senderName: item.sender_id === participantId ? participantName : 'Partner',
+          originalText: item.original_text,
+          originalLanguage: item.original_language,
+          translatedText: item.translated_text,
+          translatedLanguage: item.translated_language,
+          status: item.status,
+          verification: item.verification,
+          confirmed: item.confirmed,
+          audioBase64: item.audio_base64,
+          audioFormat: item.audio_format || 'wav',
         })
         if (item.status === 'awaiting_confirmation' && item.sender_id === participantId) {
-          setClarification({ messageId: item.message_id,
-            prompt: item.verification?.prompt_to_speaker || 'Please confirm the critical detail or re-record.' })
+          setClarification({
+            messageId: item.message_id,
+            prompt: item.verification?.prompt_to_speaker || 'Please confirm the critical detail or re-record.',
+          })
         }
       }
     })
@@ -202,9 +197,7 @@ function ConversationInner({ session, roomCode }) {
       navigate('/')
     })
 
-    // Connect
     ws.connect()
-
     return () => ws.disconnect()
   }, []) // eslint-disable-line react-hooks/exhaustive-deps
 
@@ -224,7 +217,7 @@ function ConversationInner({ session, roomCode }) {
     try {
       const result = await recorder.stopRecording()
       if (!result || !result.base64) {
-        setError('No audio recorded. Please try again.')
+        setError('No audio recorded. Please speak clearly into your mic.')
         return
       }
 
@@ -248,6 +241,7 @@ function ConversationInner({ session, roomCode }) {
       recordingTimerRef.current = null
       handleStopRecording()
     }, MAX_RECORDING_SECONDS * 1000)
+
     return () => {
       if (recordingTimerRef.current) {
         clearTimeout(recordingTimerRef.current)
@@ -258,17 +252,23 @@ function ConversationInner({ session, roomCode }) {
 
   const respondToVerification = (confirmed) => {
     if (!clarification) return
-    ws.send({ type: confirmed ? WS_EVENTS.VERIFICATION_CONFIRMED : WS_EVENTS.VERIFICATION_REJECTED,
-      message_id: clarification.messageId })
+    ws.send({
+      type: confirmed ? WS_EVENTS.VERIFICATION_CONFIRMED : WS_EVENTS.VERIFICATION_REJECTED,
+      message_id: clarification.messageId,
+    })
     if (!confirmed) setClarification(null)
     else setIsProcessing(true)
   }
 
   const retryMessage = () => {
     if (!pendingAudio) return
-    setError(null); setIsProcessing(true)
-    ws.send({ type: WS_EVENTS.AUDIO_DATA, message_id: pendingAudio.messageId,
-      audio_base64: pendingAudio.base64 })
+    setError(null)
+    setIsProcessing(true)
+    ws.send({
+      type: WS_EVENTS.AUDIO_DATA,
+      message_id: pendingAudio.messageId,
+      audio_base64: pendingAudio.base64,
+    })
   }
 
   const loadOutcome = async () => {
@@ -276,35 +276,35 @@ function ConversationInner({ session, roomCode }) {
       const response = await fetch(`/api/rooms/${roomCode}/outcome`, {
         headers: { Authorization: `Bearer ${participantToken}` },
       })
-      if (!response.ok) throw new Error('Could not load outcome card')
-      setOutcome(await response.json()); setShowOutcome(true)
-    } catch (err) { setError(err.message) }
+      if (!response.ok) throw new Error('Could not load outcome summary')
+      setOutcome(await response.json())
+      setShowOutcome(true)
+    } catch (err) {
+      setError(err.message)
+    }
   }
 
   const saveOutcome = async () => {
-    const response = await fetch(`/api/rooms/${roomCode}/outcome`, { method: 'PUT',
+    const response = await fetch(`/api/rooms/${roomCode}/outcome`, {
+      method: 'PUT',
       headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${participantToken}` },
-      body: JSON.stringify(outcome) })
+      body: JSON.stringify(outcome),
+    })
     if (response.ok) setShowOutcome(false)
-    else setError('Could not save outcome card')
+    else setError('Could not save outcome summary')
   }
 
   const copyRoomCode = () => {
     navigator.clipboard?.writeText(roomCode)
-    codeCopiedRef.current = true
-    setError(null)
-    // Brief visual feedback
-    const btn = document.querySelector('.copy-code-btn')
-    if (btn) {
-      btn.textContent = 'Copied!'
-      setTimeout(() => { btn.textContent = 'Copy' }, 1500)
-    }
+    setCopied(true)
+    setTimeout(() => setCopied(false), 2000)
   }
 
   const handleLeave = async () => {
-    if (!window.confirm('End the session and permanently delete its messages and outcome card?')) return
+    if (!window.confirm('End conversation and delete all session messages?')) return
     await fetch(`/api/rooms/${roomCode}`, {
-      method: 'DELETE', headers: { Authorization: `Bearer ${participantToken}` },
+      method: 'DELETE',
+      headers: { Authorization: `Bearer ${participantToken}` },
     })
     ws.disconnect()
     sessionStorage.removeItem('bharatvaani_session')
@@ -315,108 +315,227 @@ function ConversationInner({ session, roomCode }) {
   const otherLang = otherParticipant ? otherParticipant.language : (language === 'hi' ? 'en' : 'hi')
 
   return (
-    <div className="conversation-page">
-      {/* Header */}
-      <header className="conv-header">
-        <div className="header-left">
-          <h2 className="header-title">BharatVaani</h2>
-          <div className="room-info">
-            <span className="room-code">Room: {roomCode}</span>
-            <button className="copy-code-btn" onClick={copyRoomCode}>Copy</button>
+    <div className="conversation-screen">
+      {/* Top Application Bar */}
+      <header className="conv-nav-bar">
+        <div className="nav-col-left">
+          <div className="brand-badge" onClick={() => navigate('/')} title="Back to home">
+            <span className="brand-flag">🇮🇳</span>
+            <span className="brand-text">BharatVaani</span>
+          </div>
+
+          <div className="room-code-chip" onClick={copyRoomCode} title="Click to copy room code">
+            <span className="chip-label">Room</span>
+            <span className="chip-code">{roomCode}</span>
+            <span className="chip-copy-icon">
+              {copied ? (
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#10b981" strokeWidth="2.5"><polyline points="20 6 9 17 4 12"/></svg>
+              ) : (
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>
+              )}
+            </span>
           </div>
         </div>
-        <div className="header-right">
-          <div className="lang-pair">
-            <span className="lang-tag own-lang">{LANG_LABELS[language]}</span>
-            <span className="lang-arrow">↔</span>
-            <span className="lang-tag other-lang">{LANG_LABELS[otherLang]}</span>
+
+        {/* Center: Language Pair Exchange Pill */}
+        <div className="nav-col-center">
+          <div className="lang-exchange-pill">
+            <span className="exchange-tag own" title="Your language">
+              {LANG_LABELS[language]}
+            </span>
+            <span className="exchange-arrow" aria-hidden="true">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2"><path d="M7 16l-4-4m0 0l4-4m-4 4h18m-4 4l4-4m0 0l-4-4"/></svg>
+            </span>
+            <span className="exchange-tag partner" title="Partner's language">
+              {LANG_LABELS[otherLang]}
+            </span>
           </div>
-          <div className={`connection-status ${ws.isConnected ? 'connected' : 'disconnected'}`}>
-            <span className="status-dot"></span>
-            {ws.isConnected ? 'Connected' : ws.connectionError ? 'Session unavailable' : 'Reconnecting...'}
+        </div>
+
+        {/* Right: Connection Status & Exit */}
+        <div className="nav-col-right">
+          <div className={`status-pill ${ws.isConnected ? 'is-connected' : 'is-disconnected'}`}>
+            <span className="status-jewel" />
+            <span className="status-text">
+              {ws.isConnected ? (participants.length > 1 ? 'Live · 2 in Room' : 'Live · Waiting') : 'Reconnecting...'}
+            </span>
           </div>
+
+          <button className="nav-icon-btn exit-btn" onClick={handleLeave} title="End conversation and delete room">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" y1="12" x2="9" y2="12"/></svg>
+          </button>
         </div>
       </header>
 
-      {/* Partner info bar */}
+      {/* Partner Joined Announcement Strip */}
       {participants.length > 0 && (
-        <div className="partner-bar">
-          Partner: {participants.map((p) => `${p.name} (${LANG_LABELS[p.language]})`).join(', ')}
+        <div className="presence-banner">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>
+          <span>
+            Connected Participants: {participants.map((p) => `${p.name} (${LANG_LABELS[p.language]})`).join(' · ')}
+          </span>
         </div>
       )}
 
-      {/* Error banner */}
+      {/* Error notification banner */}
       {(ws.connectionError || error || recorder.error) && (
-        <div className="error-banner conv-error">
-          {ws.connectionError || error || recorder.error}
-          {pendingAudio && <button className="retry-btn" onClick={retryMessage}>Retry</button>}
+        <div className="conv-alert-strip">
+          <span className="alert-strip-text">{ws.connectionError || error || recorder.error}</span>
+          {pendingAudio && (
+            <button className="alert-retry-btn" onClick={retryMessage}>
+              Retry Send
+            </button>
+          )}
         </div>
       )}
 
-      {clarification && <div className="clarification-banner" role="alert">
-        <strong>Check this detail before it is sent</strong><p>{clarification.prompt}</p>
-        <button onClick={() => respondToVerification(true)}>Confirm and deliver</button>
-        <button className="secondary" onClick={() => respondToVerification(false)}>No, re-record</button>
-      </div>}
+      {/* Meaning Protection Confirmation Modal / Card */}
+      {clarification && (
+        <aside className="confirmation-modal" role="dialog" aria-labelledby="confirm-heading">
+          <div className="modal-shield-header">
+            <span className="shield-icon">🛡️</span>
+            <div>
+              <h3 id="confirm-heading" className="modal-heading">Meaning Protection Verification</h3>
+              <p className="modal-subheading">A critical number, quantity, or financial amount was detected.</p>
+            </div>
+          </div>
 
-      {/* Messages area */}
-      <div className="messages-area">
-        {messageOrder.length === 0 && (
-          <div className="empty-state">
-            <p className="empty-icon">🎤</p>
-            <p>No messages yet.</p>
-            <p>Share room code <strong>{roomCode}</strong> with your partner, then tap the mic to start talking!</p>
+          <div className="modal-prompt-content">
+            <p className="modal-prompt-text">{clarification.prompt}</p>
+          </div>
+
+          <div className="modal-actions">
+            <button className="modal-btn confirm" onClick={() => respondToVerification(true)}>
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><polyline points="20 6 9 17 4 12"/></svg>
+              Confirm & Deliver Speech
+            </button>
+            <button className="modal-btn discard" onClick={() => respondToVerification(false)}>
+              Discard & Re-record
+            </button>
+          </div>
+        </aside>
+      )}
+
+      {/* Messages Scroll View */}
+      <main className="messages-scroll-area">
+        {messageOrder.length === 0 ? (
+          <div className="conversation-empty-state">
+            <div className="empty-state-glow">
+              <span className="empty-state-icon">🎙️</span>
+            </div>
+            <h2 className="empty-state-title">Ready for Voice Conversation</h2>
+            <p className="empty-state-desc">
+              Share your room code <strong className="empty-room-tag">{roomCode}</strong> with your partner.
+            </p>
+            <div className="empty-instructions-card">
+              <div className="instruction-step">
+                <span className="step-num">1</span>
+                <span>Tap the microphone button below to record in <strong>{LANG_LABELS[language]}</strong>.</span>
+              </div>
+              <div className="instruction-step">
+                <span className="step-num">2</span>
+                <span>Gnani AI transcribes your voice, verifies critical numbers, and Gemini translates.</span>
+              </div>
+              <div className="instruction-step">
+                <span className="step-num">3</span>
+                <span>Your partner immediately hears native speech in <strong>{LANG_LABELS[otherLang]}</strong>.</span>
+              </div>
+            </div>
+          </div>
+        ) : (
+          <div className="bubbles-wrapper">
+            {messageOrder.map((msgId) => {
+              const msg = messages[msgId]
+              if (!msg) return null
+              return (
+                <TranscriptBubble
+                  key={msgId}
+                  message={msg}
+                  isOwn={msg.senderId === participantId}
+                />
+              )
+            })}
           </div>
         )}
-
-        {messageOrder.map((msgId) => {
-          const msg = messages[msgId]
-          if (!msg) return null
-          return (
-            <TranscriptBubble
-              key={msgId}
-              message={msg}
-              isOwn={msg.senderId === participantId}
-            />
-          )
-        })}
         <div ref={messagesEndRef} />
-      </div>
+      </main>
 
-      {/* Push to talk */}
-      <div className="ptt-container">
+      {/* Floating Bottom Control Dock */}
+      <footer className="conv-control-dock">
         <PushToTalk
           isRecording={recorder.isRecording}
           onStart={handleStartRecording}
           onStop={handleStopRecording}
           disabled={isProcessing || !ws.isConnected}
         />
-      </div>
 
-      {/* Leave button */}
-      <button className="leave-btn" onClick={handleLeave}>
-        End session and delete
-      </button>
-      <button className="outcome-btn" onClick={loadOutcome}>Conversation outcome card</button>
-      {showOutcome && outcome && <div className="outcome-panel">
-      <h3>Conversation outcome</h3>
-      <p>{outcome.summary_status}</p>
-        {(outcome.items || []).map((item, index) => <label className="outcome-row" key={`${item.message_id}-${index}`}>
-          <span>{item.kind} · {item.status}</span>
-          <input value={item.value || ''} onChange={(event) => setOutcome((old) => ({...old,
-            items: old.items.map((entry, i) => i === index ? {...entry, value: event.target.value} : entry)}))} />
-        </label>)}
-        {['decisions', 'next_steps'].map((key) => <section key={key}>
-          <h4>{key === 'decisions' ? 'Decisions' : 'Next steps'}</h4>
-          {(outcome[key] || []).map((entry, index) => <label className="outcome-row" key={`${key}-${index}`}>
-            <span>{entry.ai_generated ? 'AI-generated · review' : 'Editable'}</span>
-            <input value={entry.text || ''} onChange={(event) => setOutcome((old) => ({...old,
-              [key]: old[key].map((item, i) => i === index ? {...item, text: event.target.value} : item)}))} />
-          </label>)}
-        </section>)}
-        <button onClick={saveOutcome}>Save edited card</button>
-        <button className="secondary" onClick={() => setShowOutcome(false)}>Close</button>
-      </div>}
+        <div className="dock-utility-row">
+          <button className="utility-link-btn" onClick={loadOutcome}>
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/><polyline points="10 9 9 9 8 9"/></svg>
+            Summary & Outcome Card
+          </button>
+        </div>
+      </footer>
+
+      {/* Outcome Modal */}
+      {showOutcome && outcome && (
+        <div className="outcome-modal-backdrop" onClick={() => setShowOutcome(false)}>
+          <div className="outcome-modal-sheet" onClick={(e) => e.stopPropagation()}>
+            <div className="sheet-header">
+              <h3>Conversation Outcome Summary</h3>
+              <button className="sheet-close-btn" onClick={() => setShowOutcome(false)}>✕</button>
+            </div>
+            
+            <p className="sheet-status">{outcome.summary_status}</p>
+
+            <div className="sheet-body">
+              {(outcome.items || []).map((item, index) => (
+                <div className="outcome-item-row" key={`${item.message_id}-${index}`}>
+                  <span className="outcome-item-badge">{item.kind} · {item.status}</span>
+                  <input
+                    className="outcome-item-input"
+                    value={item.value || ''}
+                    onChange={(e) => {
+                      const val = e.target.value
+                      setOutcome((old) => ({
+                        ...old,
+                        items: old.items.map((entry, i) => i === index ? { ...entry, value: val } : entry),
+                      }))
+                    }}
+                  />
+                </div>
+              ))}
+
+              {['decisions', 'next_steps'].map((key) => (
+                <section key={key} className="outcome-section">
+                  <h4 className="outcome-section-title">{key === 'decisions' ? 'Decisions & Agreements' : 'Next Steps'}</h4>
+                  {(outcome[key] || []).map((entry, index) => (
+                    <div className="outcome-item-row" key={`${key}-${index}`}>
+                      <span className="outcome-item-badge">{entry.ai_generated ? 'AI Inferred' : 'Verified'}</span>
+                      <input
+                        className="outcome-item-input"
+                        value={entry.text || ''}
+                        onChange={(e) => {
+                          const val = e.target.value
+                          setOutcome((old) => ({
+                            ...old,
+                            [key]: old[key].map((item, i) => i === index ? { ...item, text: val } : item),
+                          }))
+                        }}
+                      />
+                    </div>
+                  ))}
+                </section>
+              ))}
+            </div>
+
+            <div className="sheet-footer">
+              <button className="modal-btn confirm" onClick={saveOutcome}>Save Outcome Card</button>
+              <button className="modal-btn secondary" onClick={() => setShowOutcome(false)}>Close</button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   )
 }

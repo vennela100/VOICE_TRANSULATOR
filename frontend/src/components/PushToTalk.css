@@ -1,62 +1,215 @@
-.push-to-talk {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: 10px;
-  padding: 18px 18px 20px;
-}
+/* Modern Push to Talk dock styling */
 
-.ptt-button {
-  position: relative;
-  width: 116px;
-  height: 116px;
+.ptt-wrapper {
   display: flex;
   flex-direction: column;
   align-items: center;
   justify-content: center;
-  gap: 5px;
-  border: 1px solid rgba(255, 255, 255, 0.38);
-  border-radius: 50%;
-  background: linear-gradient(150deg, #22826a, #135b4b);
-  color: #fff;
-  box-shadow: 0 0 0 7px #edf4ee, 0 10px 24px rgba(18, 91, 72, 0.26);
-  transition: transform 180ms ease, box-shadow 180ms ease, background 180ms ease;
-  user-select: none;
-  -webkit-tap-highlight-color: transparent;
+  padding: 16px 20px 20px;
+  gap: 12px;
 }
 
-.ptt-button:hover:not(.disabled) {
-  transform: translateY(-2px);
-  box-shadow: 0 0 0 7px #edf4ee, 0 14px 28px rgba(18, 91, 72, 0.3);
-}
-
-.ptt-button:active:not(.disabled) { transform: scale(0.97); }
-
-.ptt-button.recording {
-  border-color: rgba(255, 255, 255, 0.72);
-  background: linear-gradient(145deg, #d85c50, #b83d38);
-  box-shadow: 0 0 0 7px #f8e9e5, 0 0 0 13px rgba(200, 68, 62, 0.12), 0 10px 25px rgba(172, 56, 51, 0.25);
-  animation: pulse-ring 1.45s ease-out infinite;
-}
-
-.ptt-button.disabled { cursor: not-allowed; opacity: 0.5; }
-.ptt-icon { font-size: 29px; line-height: 1; }
-.ptt-label { font-size: 10px; font-weight: 750; letter-spacing: 0.11em; }
-
-.recording-indicator {
+.ptt-action-container {
+  position: relative;
   display: flex;
   align-items: center;
+  justify-content: center;
+  width: 120px;
+  height: 120px;
+}
+
+/* Pulsing wave rings when live recording */
+.recording-wave {
+  position: absolute;
+  inset: -14px;
+  border-radius: 50%;
+  pointer-events: none;
+}
+
+.wave-1 {
+  background: rgba(239, 68, 68, 0.2);
+  animation: pulse-wave-1 1.6s ease-out infinite;
+}
+
+.wave-2 {
+  background: rgba(239, 68, 68, 0.12);
+  animation: pulse-wave-2 1.6s ease-out infinite 0.4s;
+}
+
+/* Main microphone button */
+.ptt-main-btn {
+  position: relative;
+  z-index: 2;
+  width: 104px;
+  height: 104px;
+  border-radius: 50%;
+  background: linear-gradient(135deg, var(--primary) 0%, #3730a3 100%);
+  color: #ffffff;
+  box-shadow: 0 10px 25px -4px var(--primary-glow), 0 0 0 6px #e0e7ff;
+  transition: all var(--transition-fast);
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border: none;
+}
+
+.ptt-main-btn:hover:not(.is-disabled):not(.is-recording) {
+  transform: translateY(-2px) scale(1.03);
+  box-shadow: 0 16px 30px -4px rgba(79, 70, 229, 0.4), 0 0 0 7px #e0e7ff;
+}
+
+.ptt-main-btn:active:not(.is-disabled) {
+  transform: translateY(1px) scale(0.97);
+}
+
+.ptt-btn-inner {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+}
+
+.ptt-btn-label {
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  opacity: 0.95;
+}
+
+/* Recording State */
+.ptt-main-btn.is-recording {
+  background: linear-gradient(135deg, #ef4444 0%, #b91c1c 100%);
+  box-shadow: 0 12px 28px -4px rgba(239, 68, 68, 0.45), 0 0 0 6px #fee2e2;
+  animation: ptt-live-pulse 1.6s ease-in-out infinite;
+}
+
+.ptt-main-btn.is-disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+  filter: grayscale(30%);
+}
+
+/* Recording Status Bar */
+.recording-status-bar {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
   gap: 8px;
-  color: #b53f39;
+  animation: fadeIn 0.2s ease-out;
+}
+
+.recording-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 10px;
+  background: var(--crimson-subtle);
+  border: 1px solid rgba(239, 68, 68, 0.25);
+  border-radius: var(--radius-full);
+}
+
+.recording-live-dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: var(--crimson);
+  animation: blink 0.9s infinite;
+}
+
+.recording-timer {
+  font-family: 'JetBrains Mono', monospace;
   font-size: 12px;
-  font-weight: 650;
+  font-weight: 700;
+  color: var(--crimson-ink);
 }
 
-.pulse-dot { width: 8px; height: 8px; border-radius: 50%; background: var(--recording); animation: pulse-dot 1s ease-in-out infinite; }
-
-@keyframes pulse-ring {
-  0% { box-shadow: 0 0 0 7px #f8e9e5, 0 0 0 11px rgba(200, 68, 62, 0.12), 0 10px 25px rgba(172, 56, 51, 0.25); }
-  100% { box-shadow: 0 0 0 7px #f8e9e5, 0 0 0 21px rgba(200, 68, 62, 0), 0 10px 25px rgba(172, 56, 51, 0.25); }
+/* Live Animated Waveform Bars */
+.live-waveform {
+  display: flex;
+  align-items: center;
+  gap: 3px;
+  height: 22px;
 }
 
-@keyframes pulse-dot { 0%, 100% { opacity: 1; } 50% { opacity: 0.35; } }
+.wave-bar {
+  width: 3.5px;
+  background: var(--crimson);
+  border-radius: 2px;
+  animation: wave-bounce 1s ease-in-out infinite alternate;
+}
+
+.bar-1 { height: 6px; animation-delay: 0.1s; }
+.bar-2 { height: 16px; animation-delay: 0.3s; }
+.bar-3 { height: 22px; animation-delay: 0.15s; }
+.bar-4 { height: 10px; animation-delay: 0.4s; }
+.bar-5 { height: 18px; animation-delay: 0.2s; }
+.bar-6 { height: 8px; animation-delay: 0.5s; }
+.bar-7 { height: 19px; animation-delay: 0.25s; }
+.bar-8 { height: 7px; animation-delay: 0.35s; }
+
+.recording-hint {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--text-secondary);
+}
+
+/* Idle & Processing Hints */
+.ptt-idle-hint {
+  font-size: 12px;
+  color: var(--text-muted);
+  text-align: center;
+}
+
+.processing-hint {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  color: var(--primary);
+  font-weight: 600;
+  background: var(--primary-subtle);
+  padding: 4px 12px;
+  border-radius: var(--radius-full);
+}
+
+.inline-spinner {
+  width: 12px;
+  height: 12px;
+  border: 2px solid rgba(79, 70, 229, 0.3);
+  border-top-color: var(--primary);
+  border-radius: 50%;
+  animation: spin 0.8s linear infinite;
+}
+
+/* Keyframes */
+@keyframes pulse-wave-1 {
+  0% { transform: scale(0.95); opacity: 0.8; }
+  100% { transform: scale(1.35); opacity: 0; }
+}
+
+@keyframes pulse-wave-2 {
+  0% { transform: scale(0.95); opacity: 0.6; }
+  100% { transform: scale(1.55); opacity: 0; }
+}
+
+@keyframes ptt-live-pulse {
+  0%, 100% { transform: scale(1); }
+  50% { transform: scale(1.03); }
+}
+
+@keyframes wave-bounce {
+  0% { transform: scaleY(0.3); }
+  100% { transform: scaleY(1); }
+}
+
+@keyframes blink {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.3; }
+}
+
+@keyframes fadeIn {
+  from { opacity: 0; transform: translateY(4px); }
+  to { opacity: 1; transform: translateY(0); }
+}
